@@ -142,6 +142,7 @@ print("\n")
 
 
 P = predictions.argmax(axis=1)
+print (predictions)
 print (P)
 
 
@@ -150,9 +151,10 @@ for i in range( P.size ):
   # reorder the channels
   image = data[i][...,::-1]
   image = np.uint8( image*255 )
+  confidence = predictions[i][P[i]]
 
   image = cv2.resize( image, (400,400) )
-  print ("Identified as %s"%(labels[P[i]]) )
+  print ("Identified as %s  [%.3f]"%(labels[P[i]],confidence) )
 
   cv2.imshow("Out",image)
   if cv2.waitKey(0) == 27: 
