@@ -2,6 +2,15 @@
 # py -3.5 train_cnn.py
 # needs to be v3.5 because of TensorFlow
 
+
+#import tensorflow as tf
+#config = tf.ConfigProto(
+#        device_count = {'GPU': 0}
+#    )
+#sess = tf.Session(config=config)
+
+
+
 # import the necessary packages
 from keras.models import Sequential
 from keras.models import model_from_json
@@ -22,6 +31,9 @@ import time
 import os
 import cv2
 
+
+
+os.environ['CUDA_VISIBLE_DEVICES'] = '-1'  # '0' for GPU, '' for CPU
 
 
 
@@ -53,6 +65,30 @@ def load_model(filename):
   return (loaded_model,loaded_labels)
 
 
+
+def random_crop(cvimg,shape):
+  cvimg = np.array(cvimg) # ensure it is a numpy array
+  (srcW,srcH,srcC) = cvimg.shape
+  (dstW,dstH,dstC) = shape
+
+  # first resample the image so that the crop just fits
+  ratio = np.max( [dstW/srcW, dstH/srcH] )
+  cvimg = cv2.resize( cvimg, (0,0), fx=ratio, fy=ratio )
+
+  # remeasure after resize
+  (srcW,srcH,srcC) = cvimg.shape
+
+  # numpy resize to fix channel count
+  cvimg = np.resize( cvimg, (srcW,srcH,dstC) )
+
+  # final crop
+  x = np.int16( np.random.random_sample() * (srcW-dstW+1) )
+  y = np.int16( np.random.random_sample() * (srcH-dstH+1) )
+  return cvimg[x:(x+dstW),y:(y+dstH),:(dstC)]
+
+
+
+
 # construct the argument parser and parse the arguments
 ap = argparse.ArgumentParser()
 ap.add_argument("-d", "--dataset", type=str, default="shapes",
@@ -74,7 +110,8 @@ labels = []
 
 
 t0 = time.time()
-
+#input_shape = (200,200,3)
+input_shape = (32,32,3)
 
 
 # loop over our input images
@@ -84,15 +121,29 @@ for imagePath in imagePaths:
   # images list
 
   image = Image.open(imagePath)
-  print(imagePath,np.array(image).shape)
+  sh1 = np.array(image).shape
 
-  image = ( np.array(image.resize((80,80))) / 255.0 )[:,:,:3]
+  image = random_crop(image,input_shape)
   data.append(image)
+
+  sh2 = np.array(image).shape
+  print(imagePath,sh1,sh2)
 
   # extract the class label from the file path and update the
   # labels list
   label = imagePath.split(os.path.sep)[-2]
   labels.append(label)
+
+#for img in data:
+#  """Preview image data"""
+#
+#  print (img.shape)
+#  cv2.imshow("Out",img[...,::-1])
+#  if cv2.waitKey(0) == 27: 
+#    break  # esc to quit
+#
+#exit()
+
 
 print(labels)
 
@@ -120,20 +171,24 @@ else:
   # define our Convolutional Neural Network architecture
   model = Sequential()
 
-  model.add(Conv2D(6, (5, 5), padding="same", input_shape=(80,80, 3)))
+  model.add(Conv2D(16, (3,3), padding="valid", input_shape=input_shape))  
   model.add(Activation("relu"))
-  model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+  model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))                
 
-  model.add(Conv2D(12, (3, 3), padding="same"))
+  model.add(Conv2D(32, (3,3), padding="valid"))                           
   model.add(Activation("relu"))
-  model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+  model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))                
 
-  model.add(Conv2D(6, (3, 3), padding="same"))
+  model.add(Conv2D(64, (3,3), padding="valid"))                           
   model.add(Activation("relu"))
-  model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
+  model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))                
 
   model.add(Flatten())
-  model.add(Dense(5))
+
+#  model.add(Dense(1024))
+#  model.add(Activation("relu"))
+
+  model.add(Dense(3))
   model.add(Activation("softmax"))
 
 
@@ -178,15 +233,15 @@ P = predictions.argmax(axis=1)
 for i in range( Y.size ):
 
   correct = ' ' if ( P[i] == Y[i] ) else 'X'
-  print ("%s   %s => %s" % (correct,class_labels[Y[i]],class_labels[P[i]]))
 
   # reorder the channels
-  image = testX[i][...,::-1]
-  image = np.uint8( image*255 )
-
-  image = cv2.resize( image, (400,400) )
+  image = testX[i]
+  #image = np.uint8( image * 255 )
+  image = cv2.resize( image, (512,512) )
   label = class_labels[Y[i]]
 
-  cv2.imshow("Out",image)
+  print ("%s   %10s => %10s" % (correct,class_labels[Y[i]],class_labels[P[i]]), image.shape )
+
+  cv2.imshow("Out",image[...,::-1])
   if cv2.waitKey(0) == 27: 
     break  # esc to quit
